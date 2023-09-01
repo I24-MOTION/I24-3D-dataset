@@ -7,7 +7,7 @@
 - [ ] Save spline object data as flat file
 - [X] Save timestamps as flat file
 - [ ] Nest homgraphy code nicely
-- [ ] Nest VideoWrapper code nicely with optional CV2 / VPF backend
+- [ ] Nest VideoWrapper code nicely with optional CV2 / VPF backend (want to spend all of your loading time on the front-end installing this dumb package??)
 - [ ] Update homography to use curve offset parameters and load from JSON
 - [ ] Implement CSV - dataloader
 - [ ] Implement JSON spline dataloader
@@ -18,3 +18,5 @@
 - [ ] Cache evaluation runs from database as files
 - [ ] Get evaluation script to work with the above file structure
 - [ ] Stash all previous code and data on a hard drive never to be seen or used again!
+- [ ] Make a beautiful beautiful readme
+- [ ] Update the manuscript
