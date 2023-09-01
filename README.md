@@ -1,10 +1,20 @@
 # I24-3D-dataset
 
+This work is to appear at BMVC 2023.
+paper: https://arxiv.org/pdf/2308.14833.pdf
+
+## Preliminaries
+
+
+## Requirements
+It's just data, there are no requirements...
+But more realistically, if you want to use the utilities provided in this repository, you'll need some basic python libraries:
+
 
 ## TODO
 - [X] Save annotations as flat file
 - [X] Save homography data as flat file
-- [ ] Save spline object data as flat file
+- [X] Save spline object data as flat file
 - [X] Save timestamps as flat file
 - [ ] Nest homgraphy code nicely
 - [ ] Nest VideoWrapper code nicely with optional CV2 / VPF backend (want to spend all of your loading time on the front-end installing this dumb package??)
