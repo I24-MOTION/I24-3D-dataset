@@ -17,14 +17,14 @@ But more realistically, if you want to use the utilities provided in this reposi
 - [X] Save spline object data as flat file
 - [X] Save timestamps as flat file
 - [X] Nest homgraphy code nicely
-- [ ] Nest VideoWrapper code nicely with optional CV2 / VPF backend (want to spend all of your loading time on the front-end installing this dumb package??)
 - [X] Update homography to use curve offset parameters and load from JSON
 - [X] Implement CSV - dataloader
 - [X] Implement JSON spline dataloader
 - [X] Implement timestamp file dataloader
-- [ ] Make a simple DataHandler object that serves up annotations, timestamps and frames with sweet sweet precision and does basic things like object count, convert to image, etc.
-- [ ] Make a simple viz tool that shows objects, spline objects, masks, roadway grid, and mouse-over object details
-- [ ] Make a no-handrails annotation tool
+- [X] Make a simple DataHandler object that serves up annotations, timestamps and frames with sweet sweet precision and does basic things
+- [X] Make a simple viz tool that shows objects, spline objects, masks, roadway grid, and object details
+- [X] Make a no-handrails annotation tool
+
 - [ ] Cache evaluation runs from database as files
 - [ ] Get evaluation script to work with the above file structure
 - [ ] Stash all previous code and data on a hard drive never to be seen or used again!
