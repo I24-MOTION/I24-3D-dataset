@@ -320,6 +320,7 @@ class Homography():
         Converts points by means of ____________
         
         points - [d,m,2] array of points in image
+        name - str or list [d] of camera names e.g. p1c3 
         """
         if name is None:
             name = self.default_correspondence
@@ -398,6 +399,8 @@ class Homography():
         performed by flattening batch dimension d and object point dimension m together
         
         points - [d,m,3] array of points in 3-space
+        name - str or list [d] of camera names e.g. p1c3 
+
         """
         if name is None:
             name = self.default_correspondence
@@ -464,6 +467,8 @@ class Homography():
         Calls state_to_space, then space_to_im
         
         points - [d,s] matrix of points in state formulation
+        name - str or list [d] of camera names e.g. p1c3 
+
         """
         if name is None:
             name = self.default_correspondence
@@ -476,6 +481,7 @@ class Homography():
         Calls im_to_space, then space_to_state
         
         points - [d,m,2] array of points in image
+        name - str or list [d] of camera names e.g. p1c3 or
         """
         if name is None:
             name = self.default_correspondence
@@ -730,48 +736,7 @@ class Homography():
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
 
-def load_i24_csv(file):
-        """
-        Simple no-frills function to load data as currently formatted on the i24 project
-        labels - first row of string headers for data columns
-        data - dict of lists, one key per frame, one entry per frame object
-        """
-        short_name = file.split("/")[-1]
-        HEADERS = True
-        
-        # parse first file
-        rows = []
-        with open(file,"r") as f:
-            read = csv.reader(f)
-            
-            for row in read:
-                rows.append(row)
-                    
-        data = {}
-        HEADERS = True
-        for row_idx in range(len(rows)):
-            row = rows[row_idx]
-            
-            # pass header lines through as-is
-            if HEADERS:
-                headers = row
-                if len(row) > 0 and row[0] == "Frame #":
-                    HEADERS = False
-            
-            
-            else:
-                
-                if len(row) == 0:
-                    continue
-                
-                frame_idx = int(row[0])
-                if frame_idx not in data.keys():
-                    data[frame_idx] = [row]
-                else:
-                    data[frame_idx].append(row)
-                
-        
-        return headers,data
+
 
 class Homography_Wrapper():
     """

@@ -164,7 +164,7 @@ def evaluate(gt_collection,
              sample_freq     = 30,
              break_sample = 2700,
              iou_threshold = 0.3,
-             plot_traj = False):
+             plot_traj = True):
     
     RESULT = {}
     
@@ -516,7 +516,11 @@ def evaluate(gt_collection,
             
             gt_cls = gt_dict[gt_id]["class"]
             if type(gt_cls) == str:
-                gt_cls = class_dict[gt_cls]
+                try:
+                    gt_cls = class_dict[gt_cls]
+                except:
+                    gt_cls = "midsize"
+                    gt_cls = class_dict[gt_cls]
             pred_cls = pred_dict[pred_id]["class"]
             if type(pred_cls) == str:
                 pred_cls = class_dict[pred_cls]
@@ -817,6 +821,6 @@ def evaluate(gt_collection,
 #%% 
 if __name__ == "__main__":
     
-    gt_path   = "/home/worklab/Documents/I24-3D/data/spl_obj/scene1_splobj.json"
-    pred_path = "/home/worklab/Documents/I24-3D/data/track/scene1_tracklets.json" 
+    gt_path   = "/home/worklab/Documents/I24-3D/data/spl_obj/scene3_splobj.json"
+    pred_path = "/home/worklab/Documents/I24-3D/data/track/scene3_tracklets.json" 
     results = evaluate(gt_path,pred_path)
