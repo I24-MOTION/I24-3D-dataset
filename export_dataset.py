@@ -1,4 +1,4 @@
-from ICCV_manual_labeler_ocs import Annotator
+from scene import Scene
 
 import numpy as np
 import torch
@@ -8,34 +8,16 @@ import cv2
 import os
 import time
 
-extension_distance = 500
 start_time = time.time()
 all_data = []
 
-# for each dataset
-for scene_id in [0,4,6]:
-        
-    directory = "/home/derek/Data/cv/video/ground_truth_video_06162021/segments_4k"
-    directory = "/home/derek/Data/dataset_beta/sequence_{}".format(scene_id)
-    #dataset_save_path = "/home/derek/Data/cv/internal_datasets/dataset_beta_image_cache"
-    dataset_save_path = "/home/derek/Data/ICCV_2023/im_cache"
-    if scene_id == 0:
-        exclude_p3c6 = True
-    else:
-        exclude_p3c6 = False
+def cache_frames(ann,output_directory):
     
-    
-    # open the annotator
-    ann = Annotator(directory,scene_id = scene_id,exclude_p3c6 = exclude_p3c6)  
-    ann.buffer_lim = 1
-
-    with open("ICCV_splines_augmented_{}.cpkl".format(scene_id),"rb") as f:
-            [ann.data,ann.all_ts,ann.splines] = pickle.load(f)
     
     # for each frame idx
     for f_idx in range (2700):
         
-        if len(ann.data[f_idx]) == 0:
+        if len(ann.data[f_idx]) == 0: # past last frame
             break
         
         # for each camera
@@ -51,12 +33,7 @@ for scene_id in [0,4,6]:
             ts_data = list(filter(lambda x: x["camera"] == camera.name,ts_data))
             
             if len(ts_data) == 0:
-                break
-            
-            #ts_data = list(filter(lambda x: x["id"] == self.get_unused_id() - 1,ts_data))
-
-            if True:
-                 ts_data = [ann.offset_box_y(copy.deepcopy(obj),reverse = True) for obj in ts_data]
+                continue
             ids = [item["id"] for item in ts_data]
             if len(ts_data) > 0:
                 boxes = torch.stack([torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() for obj in ts_data])
@@ -73,43 +50,62 @@ for scene_id in [0,4,6]:
                 cam_frame_annotations.append(ts_data[i])
             
             # generate image path
-            cam_directory = "{}/im/scene_{}/{}".format(dataset_save_path,scene_id,cam_name)
-            # if not os.path.exists(cam_directory):
-            #     os.mkdir(cam_directory)
+            im_directory = "{}/im".format(output_directory)
+            if not os.path.exists(im_directory):
+                    os.mkdir(im_directory)
+            scene_directory = "{}/im/scene_{}".format(output_directory,ann.scene_id)            
+            if not os.path.exists(scene_directory):
+                    os.mkdir(scene_directory)
+            cam_directory   = "{}/im/scene_{}/{}".format(output_directory,ann.scene_id,cam_name)            
+            if not os.path.exists(cam_directory):
+                    os.mkdir(cam_directory)
+           
+            
+           
             im_path = "{}/{}.png".format(cam_directory,str(f_idx).zfill(4))
-            
-            
-            if True: # I already wrote the images
-                if not os.path.exists(im_path):
-                    frame = ann.buffer[ann.buffer_frame_idx][c_idx][0].copy() # second item is timestamp
-                    cv2.imwrite(im_path,frame)
+            if not os.path.exists(im_path):
+                frame = ann.buffer[ann.buffer_frame_idx][c_idx].copy() # second item is timestamp or dummy value
+                cv2.imwrite(im_path,frame)
+              
                 
+              
+            # # generate label path
+            # lab_directory = "{}/label".format(output_directory)
+            # if not os.path.exists(lab_directory):
+            #         os.mkdir(lab_directory)
+            # scene_directory = "{}/label/scene_{}".format(output_directory,ann.scene_id)            
+            # if not os.path.exists(scene_directory):
+            #         os.mkdir(scene_directory)
+            # cam_directory   = "{}/label/scene_{}/{}".format(output_directory,ann.scene_id,cam_name)            
+            # if not os.path.exists(cam_directory):
+            #         os.mkdir(cam_directory)
+                    
+            # lab_directory = "{}/label/scene_{}/{}".format(output_directory,scene_id,cam_name)
+            # if not os.path.exists(lab_directory):
+            #     os.mkdir(lab_directory)
+            # lab_path = "{}/{}.cpkl".format(lab_directory,str(f_idx).zfill(4))
             
-            # generate label path
-            lab_directory = "{}/label/scene_{}/{}".format(dataset_save_path,scene_id,cam_name)
-            if not os.path.exists(lab_directory):
-                os.mkdir(lab_directory)
-            lab_path = "{}/{}.cpkl".format(lab_directory,str(f_idx).zfill(4))
+            # with open(lab_path,"wb") as f:
+            #     pickle.dump(cam_frame_annotations,f)
             
-            with open(lab_path,"wb") as f:
-                pickle.dump(cam_frame_annotations,f)
-            
-            # after all objects have been  added
-            all_data.append([im_path,lab_path])
-            
-            # end one iteration of c_idx loop
+            # # after all objects have been  added
+            # all_data.append([im_path,lab_path])
+
 
         # advance cameras
         ann.next()
         if f_idx % 100 == 0:
             t_est = time.time() - start_time
-            print("Cached scene {} frame {} labels and frames, {} fps cache rate".format(scene_id,f_idx,f_idx/t_est))
+            print("Cached scene {} frame {}, {} fps cache rate".format(scene_id,f_idx,f_idx/t_est))
     
-        # end one iteration of f_idx loop
-        
-        # if f_idx > 100:
-        #     break
+     
 
-save_label_path = "{}/data_summary.cpkl".format(dataset_save_path)
-with open(save_label_path,"wb") as f:
-    pickle.dump(all_data,f)
+if __name__ == "__main__":
+
+    video_dir = "/home/worklab/Documents/I24-3D/video"
+    data_dir  = "/home/worklab/Documents/I24-3D/data"
+    out_dir = "/home/worklab/Documents/I24-3D/cache"
+    
+    for scene_id in [1,2,3]:
+        ann = Scene(video_dir,data_dir,scene_id = 1)
+        cache_frames(ann,output_directory = out_dir)

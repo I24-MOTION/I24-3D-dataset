@@ -89,7 +89,7 @@ class Homography():
     can have multiple camera/image correspondences
     """
 
-    def __init__(self,f1 = None,f2 = None):
+    def __init__(self,f1 = None,f2 = None,default_direction = 1):
         """
         Initializes Homgrapher object. 
         
@@ -104,6 +104,7 @@ class Homography():
         returns - nothing
 
         """
+        self.direction = default_direction
         
         if f1 is not None:
             self.f1 = f1
@@ -358,9 +359,31 @@ class Homography():
             new_pts[:,[4,5,6,7],2] = heights.unsqueeze(1).repeat(1,4).double()
             
             
-            for pt in new_pts:
-                
             
+            # do curve correction
+            for pidx,pt in enumerate(new_pts):
+                if type(name) == list:
+                    p2, p1, p0 = self.correspondence[name[pidx]]["curve"]
+                else:
+                    p2, p1, p0 = self.correspondence[name]["curve"]
+
+                if len(pt) == 8:
+                    center_back = (pt[2,0] + pt[3,0]) /2
+                else:
+                    center_back = pt[0,0]
+                y_offset = center_back**2*p2 + center_back*p1 + p0 # use x position for back bottom point
+                
+                if self.direction == -1 : # WB, direction = -1
+                    if type(name) == list:
+                        y_straight_offset = self.correspondence[name[pidx]]["space_pts"][0][1]
+                    else:
+                        y_straight_offset = self.correspondence[name]["space_pts"][0][1]
+                        
+                    y_offset -= y_straight_offset
+                
+                
+                new_pts[pidx,:,1] -= y_offset
+                
         else:
             print("No heights were input")
             return
@@ -380,6 +403,33 @@ class Homography():
             name = self.default_correspondence
         
         d = points.shape[0]
+        
+        # do curve correction
+        for pidx,pt in enumerate(points):
+            if type(name) == list:
+                p2, p1, p0 = self.correspondence[name[pidx]]["curve"]
+            else:
+                p2, p1, p0 = self.correspondence[name]["curve"]
+
+            if len(pt) == 8:
+                center_back = (pt[2,0] + pt[3,0]) /2
+            else:
+                center_back = pt[0,0]
+                
+            y_offset = center_back**2*p2 + center_back*p1 + p0 # use x position for back bottom point
+            
+            if self.direction == -1 : # WB, direction = -1
+                if type(name) == list:
+                    y_straight_offset = self.correspondence[name[pidx]]["space_pts"][0][1]
+                else:
+                    y_straight_offset = self.correspondence[name]["space_pts"][0][1]
+                    
+                y_offset -= y_straight_offset
+            
+            
+            points[pidx,:,1] += y_offset
+            
+            
         
         # convert points into size [dm,4]
         points = points.reshape(-1,3)
@@ -755,12 +805,12 @@ class Homography_Wrapper():
         """
         
         if hg1 is None:
-            self.hg1 = Homography()
+            self.hg1 = Homography(default_direction = 1)
         else:
             self.hg1 = hg1
             
         if hg2 is None:
-            self.hg2 = Homography()
+            self.hg2 = Homography(default_direction = -1)
         else:
             self.hg2 = hg2
             

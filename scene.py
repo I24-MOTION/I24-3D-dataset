@@ -504,7 +504,7 @@ class Scene:
                 filter(lambda x: x["gen"] == "spline", ts_data))
             ts_data = list(filter(lambda x: x["gen"] != "spline", ts_data))
 
-            if True:
+            if False:
                 ts_data = [self.offset_box_y(copy.deepcopy(
                     obj), reverse=True) for obj in ts_data]
                 ts_data_spline = [self.offset_box_y(copy.deepcopy(
@@ -591,7 +591,11 @@ class Scene:
             # plot lane markings
             if self.LANES:
                 for direction in ["_EB", "_WB"]:
-
+                    if direction == "_EB":
+                        side_offset = 0
+                    else:
+                        side_offset =  self.hg.hg2.correspondence[camera.name]["space_pts"][0][1]
+                        
                     for lane in [0, 12, 24, 36, 48]:
                         # get polyline coordinates in space
                         
@@ -602,8 +606,7 @@ class Scene:
                             p2, p1, p0 = self.hg.hg2.correspondence[camera.name]["curve"]
                             
                         x_curve = np.linspace(-3000, 3000, 6000)
-                        y_curve = np.power(x_curve, 2)*p2 + \
-                            x_curve*p1 + p0 + lane
+                        y_curve = x_curve*0 + lane + side_offset 
                         z_curve = x_curve * 0
                         curve = np.stack([x_curve, y_curve, z_curve], axis=1)
                         curve = torch.from_numpy(curve).unsqueeze(1)
@@ -619,7 +622,7 @@ class Scene:
 
                     for tick in range(0, 2000, 10):
                         y_curve = np.linspace(
-                            0, 48, 4) + p0 + p1*tick + p2*tick**2
+                            0, 48, 4) + side_offset  #+ p0 + p1*tick + p2*tick**2
                         x_curve = y_curve * 0 + tick
                         z_curve = y_curve * 0
                         curve = np.stack([x_curve, y_curve, z_curve], axis=1)
