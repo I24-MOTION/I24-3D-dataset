@@ -24,12 +24,8 @@ To use the dataset itself, there are no specific requirements (data is stored in
 - `cv2`
 - `motmetrics` (if you want to evaluate tracking results on the dataset). Available at: https://github.com/cheind/py-motmetrics
 
-##  Data format
-
-INCLUDE FILE STRUCTURE HERE
 
 
-# A few included files
 
 ##  `scene.py` - implements the data visualization and annotation tool
 
