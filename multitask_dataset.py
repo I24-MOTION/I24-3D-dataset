@@ -81,15 +81,15 @@ class I24_Dataset(data.Dataset):
         self.mask_ims = None
         if mask_dir is not None:
 
-            self.mask_ims = {0: {},
-                         4: {},
-                         6: {}}
+            self.mask_ims = {1: {},
+                         2: {},
+                         3: {}}
         
-            for scene_id in [0,4,6]:
-                scene_mask_dir = os.path.join(mask_dir,"scene_{}".format(scene_id))
+            for scene_id in [1,2,3]:
+                scene_mask_dir = os.path.join(mask_dir,"scene{}".format(scene_id))
                 mask_paths = os.listdir(scene_mask_dir)
                 for path in mask_paths:
-                    if "1080" in path:
+                    if "1080"  in path:
                         key = path.split("_")[0]
                         path = os.path.join(scene_mask_dir, path)
                         im = cv2.imread(path)
@@ -150,7 +150,9 @@ class I24_Dataset(data.Dataset):
         self.ids = []
         self.state_labels = []
 
+        # an intermediate file that combines all labels into a single file
         complete_cache_file = os.path.join(dataset_dir,"dataset_cache.cpkl")
+        
         try:        
             with open(complete_cache_file,"rb") as f:
                 [self.data,self.labels,self.ids,self.state_labels] = pickle.load(f)
@@ -255,12 +257,12 @@ class I24_Dataset(data.Dataset):
         else: # hold back the last 1-ratio percent of each scene
             ratio = 0.8
             scene_validation_frame = {
-                0:int(2700*ratio),
-                4:int(1800*ratio),
-                6:int(1800*ratio)
+                1:int(2700*ratio),
+                2:int(1800*ratio),
+                3:int(1800*ratio)
                 }
             
-            # get indicies of all data that falls within these portions of each scene
+            # get indices of all data that falls within these portions of each scene
             train_idxs = []
             for d_idx,path in enumerate(self.data):
                 scene = int(path.split("/")[-3].split("_")[-1])
@@ -821,7 +823,7 @@ class I24_Dataset(data.Dataset):
         #cv_im = cv2.resize(cv_im,(1920,1080))
         cv2.imshow("Frame",cv_im)
         cv2.waitKey(0) 
-
+        
 def collate(inputs):
         """
         Receives list of tuples and returns a tensor for each item in tuple, except metadata
@@ -856,14 +858,14 @@ if __name__ == "__main__":
     #### Test script here
     
 #%%   
-    dataset_dir = "/home/derek/Data/cv/internal_datasets/test_cache"#"dataset_beta_image_cache"
-    dataset_dir = "/home/derek/Data/ICCV_2023/im_cache/"
-    test = I24_Dataset(dataset_dir,label_format = "8_corners",mode = "train", CROP = 0, multiple_frames=True,mask_dir = "/home/derek/Data/ICCV_2023/masks")
+    dataset_dir = "/home/worklab/Documents/I24-3D/cache"
+    mask_dir = "/home/worklab/Documents/I24-3D/data/mask"
     
-    test.show(10)
+    test = I24_Dataset(dataset_dir,label_format = "8_corners",mode = "train", CROP = 0, multiple_frames=True,mask_dir = mask_dir)
     
-    for i in range(1000):
+    
+    
+    for i in range(10):
         idx = np.random.randint(0,len(test))
-
-        test[idx]
+        test.show(10)
     #cv2.destroyAllWindows()

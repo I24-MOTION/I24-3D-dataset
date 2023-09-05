@@ -65,31 +65,32 @@ def cache_frames(ann,output_directory):
             im_path = "{}/{}.png".format(cam_directory,str(f_idx).zfill(4))
             if not os.path.exists(im_path):
                 frame = ann.buffer[ann.buffer_frame_idx][c_idx].copy() # second item is timestamp or dummy value
+                frame = cv2.resize(frame,(1920,1080))
                 cv2.imwrite(im_path,frame)
               
                 
               
-            # # generate label path
-            # lab_directory = "{}/label".format(output_directory)
-            # if not os.path.exists(lab_directory):
-            #         os.mkdir(lab_directory)
-            # scene_directory = "{}/label/scene_{}".format(output_directory,ann.scene_id)            
-            # if not os.path.exists(scene_directory):
-            #         os.mkdir(scene_directory)
-            # cam_directory   = "{}/label/scene_{}/{}".format(output_directory,ann.scene_id,cam_name)            
-            # if not os.path.exists(cam_directory):
-            #         os.mkdir(cam_directory)
+            # generate label path
+            lab_directory = "{}/label".format(output_directory)
+            if not os.path.exists(lab_directory):
+                    os.mkdir(lab_directory)
+            scene_directory = "{}/label/scene_{}".format(output_directory,ann.scene_id)            
+            if not os.path.exists(scene_directory):
+                    os.mkdir(scene_directory)
+            cam_directory   = "{}/label/scene_{}/{}".format(output_directory,ann.scene_id,cam_name)            
+            if not os.path.exists(cam_directory):
+                    os.mkdir(cam_directory)
                     
-            # lab_directory = "{}/label/scene_{}/{}".format(output_directory,scene_id,cam_name)
-            # if not os.path.exists(lab_directory):
-            #     os.mkdir(lab_directory)
-            # lab_path = "{}/{}.cpkl".format(lab_directory,str(f_idx).zfill(4))
+            label_directory = "{}/label/scene_{}/{}".format(output_directory,scene_id,cam_name)
+            if not os.path.exists(label_directory):
+                os.mkdir(label_directory)
+            lab_path = "{}/{}.cpkl".format(label_directory,str(f_idx).zfill(4))
             
-            # with open(lab_path,"wb") as f:
-            #     pickle.dump(cam_frame_annotations,f)
+            with open(lab_path,"wb") as f:
+                pickle.dump(cam_frame_annotations,f)
             
-            # # after all objects have been  added
-            # all_data.append([im_path,lab_path])
+            # after all objects have been  added
+            all_data.append([im_path,lab_path])
 
 
         # advance cameras
@@ -98,8 +99,14 @@ def cache_frames(ann,output_directory):
             t_est = time.time() - start_time
             print("Cached scene {} frame {}, {} fps cache rate".format(scene_id,f_idx,f_idx/t_est))
     
+    
+        if f_idx > 10:
+            break
      
-
+    save_label_path = "{}/data_summary.cpkl".format(output_directory)
+    with open(save_label_path,"wb") as f:
+        pickle.dump(all_data,f)
+    
 if __name__ == "__main__":
 
     video_dir = "/home/worklab/Documents/I24-3D/video"
@@ -107,5 +114,5 @@ if __name__ == "__main__":
     out_dir = "/home/worklab/Documents/I24-3D/cache"
     
     for scene_id in [1,2,3]:
-        ann = Scene(video_dir,data_dir,scene_id = 1)
+        ann = Scene(video_dir,data_dir,scene_id = scene_id)
         cache_frames(ann,output_directory = out_dir)
