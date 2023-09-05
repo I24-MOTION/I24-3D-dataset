@@ -110,9 +110,11 @@ based on the active command, mouse clicks do the following:
 
 The viewing and annotation tool is built more or less without handrails, so will take some trial and error to get used to.
 
-## `export_dataset.py` - run this to write the frames of each scene video to disk (more convenient for e.g. training object detectors)
+## `export_dataset.py` 
+Run this to write the frames of each scene video to disk (more convenient for e.g. training object detectors). Be warned that this takes up a lot of space
 
-## `multitask_dataset` - 
+## `multitask_dataset.py` 
+Implements a standard pytorch `dataset` object configured for this dataset. This dataset expects frames saved to disk in the format output by `export_dataset` (reading from raw videos is much too slow). 
 
 ## TODO
 - [X] Save annotations as flat file
