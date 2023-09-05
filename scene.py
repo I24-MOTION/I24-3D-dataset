@@ -1,8 +1,8 @@
 """
 To whom it may concern:
     This codebase got away from me frankly. It's the product of me trying to support about
-    6 full dev positions worth of activities and simultaneously come up with sufficient
-    "novel" work to merit graduation, all while becoming increasingly disillusioned with 
+    4 full devs worth of projects and simultaneously come up with sufficient
+    novel work to merit graduation, all while becoming increasingly disillusioned with 
     the world of academia and the nature of a PhD altogether. Please bear this in
     mind and don't judge me too harshly as you wade through the sea of poor comments, missing comments,
     blatantly incorrect / outdated comments, vestigial code and objects and attributes, etc.
@@ -35,9 +35,9 @@ warnings.filterwarnings("ignore")
 # filter and CNNs
 
 
-class Annotator():
-    """ 
-    Annotator provides tools for labeling and correcting predicted labels
+class Scene:
+    """
+    Scene provides tools for labeling and correcting predicted labels
     for 3D objects tracked through space across multiple cameras. Camera timestamps
     are assumed to be out of phase and carry some error, which is adjustable 
     within this labeling framework. 
@@ -2753,6 +2753,6 @@ if __name__ == "__main__":
 
     video_dir = "/home/worklab/Documents/I24-3D/video"
     data_dir  = "/home/worklab/Documents/I24-3D/data"
-    ann = Annotator(video_dir,data_dir,scene_id = 1)
+    ann = Scene(video_dir,data_dir,scene_id = 1)
     ann.fill_buffer(10)    
     ann.run()
