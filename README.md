@@ -155,11 +155,13 @@ Evaluate tracking results against the ground truth spline objects. A variety of 
    
     from evaluate import evaluate
     gt_path   = "/.../I24-3D/data/spl_obj/scene3_splobj.json"
-    pred_path = "/.../my_scene3_tracklets.json" 
+    pred_path = "/.../I24-3D/data/track/scene3_tracklets.json"  # example results included in dataset
     results = evaluate(gt_path,
                         pred_path,
                         plot = True,
                         iou_threshold = 0.3)
+
+![ ](readme_im/eval_plot.png)
 
     
 ## TODO
