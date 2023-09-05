@@ -23,6 +23,13 @@ To use the dataset itself, there are no specific requirements (data is stored in
 - `numpy`
 - `cv2`
 
+##  Data format
+
+INCLUDE FILE STRUCTURE HERE
+
+
+# A few included files
+
 ##  `scene.py` - implements the data visualization and annotation tool
 
       from scene import Scene  
