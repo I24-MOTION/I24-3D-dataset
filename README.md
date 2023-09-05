@@ -115,11 +115,55 @@ based on the active command, mouse clicks do the following:
 The viewing and annotation tool is built more or less without handrails, so will take some trial and error to get used to.
 
 ## `export_dataset.py` 
-Run this to write the frames of each scene video to disk (more convenient for e.g. training object detectors). Be warned that this takes up a lot of space
+Run this to write the frames of each scene video to disk (more convenient for e.g. training object detectors). Be warned that the image files takes up a lot of space (> 100 GB). Edit the paths to point to the main video and data directories of the dataset on your machine. By default caches 1080p frames.
+    
+    from export_dataset import cache_frames
+    
+    video_dir = "/.../I24-3D/video"
+    data_dir  = "/.../I24-3D/data"
+    out_dir   = "/... /I24-3D/cache"
+    
+    for scene_id in [1,2,3]:
+        ann = Scene(video_dir,data_dir,scene_id = scene_id)
+        cache_frames(ann,output_directory = out_dir)
+
 
 ## `multitask_dataset.py` 
-Implements a standard pytorch `dataset` object configured for this dataset. This dataset expects frames saved to disk in the format output by `export_dataset` (reading from raw videos is much too slow). 
+Implements a standard pytorch `dataset` object configured for this dataset. This dataset expects frames saved to disk in the format output by `export_dataset` (reading from raw videos is much too slow). Edit the paths to point to directory where you exported dataset frames to.
 
+    from multitask_dataset import I24_Dataset
+    
+    dataset_dir = "/.../I24-3D/cache"
+    mask_dir    = "/.../I24-3D/data/mask" # for masking irrelevant portions of each frame
+    
+    test = I24_Dataset(dataset_dir,
+                       label_format = "8_corners",
+                       mode = "train",
+                       multiple_frames=True,
+                       mask_dir = mask_dir)
+    
+    # show 10 random data examples
+    for i in range(10):
+        idx = np.random.randint(0,len(test))
+        test.show(10)
+    cv2.destroyAllWindows()
+
+![ ](readme_im/dataset_example.png)
+
+## `evaluate.py`
+Evaluate tracking results against the ground truth spline objects. A variety of metrics are produced including clearMOT and HOTA metrics. Data is expected in the same format at sceneX_splobj.json (a list of objects, each a dictionary with attributes: id,l,w,h,x_position (array), y_position (array), timestamp (array), class, direction)
+   
+    from evaluate import evaluate
+    gt_path   = "/.../I24-3D/data/spl_obj/scene3_splobj.json"
+    pred_path = "/.../I24-3D/data/track/scene3_tracklets.json"  # example results included in dataset
+    results = evaluate(gt_path,
+                        pred_path,
+                        plot = True,
+                        iou_threshold = 0.3)
+
+![ ](readme_im/eval_plot.png)
+
+    
 ## TODO
 - [X] Save annotations as flat file
 - [X] Save homography data as flat file
@@ -134,8 +178,8 @@ Implements a standard pytorch `dataset` object configured for this dataset. This
 - [X] Make a simple viz tool that shows objects, spline objects, masks, roadway grid, and object details
 - [X] Make a no-handrails annotation tool
 
-- [ ] Cache evaluation runs from database as files
-- [ ] Get evaluation script to work with the above file structure
+- [X] Cache evaluation runs from database as files
+- [X] Get evaluation script to work with the above file structure
 - [ ] Stash all previous code and data on a hard drive never to be seen or used again!
 - [ ] Make a beautiful beautiful readme
 - [ ] Update the manuscript
