@@ -27,17 +27,17 @@ To use the dataset itself, there are no specific requirements (data is stored in
 
       from scene import Scene  
 
-      \# create Scene object
+      # create Scene object
       sc = Scene(video_directory,data_directory, scene_id = 1)
 
-      \# get objects for frame set i
+      # get objects for frame set i
       frame_data= sc.data[i]
 
 This returns a dictionary of objects with attributes x,y,l,w,h,camera,id,timestamp,direction ; they are keyed by `<camera>_<object_id>`. Let's convert these into tensor form:
       
       cameras = [obj["camera" for obj in frame_data.values()]
       ids     = [obj["id" for obj in frame_data.values()]
-      boxes   = torch.stack([torch.tensor([obj["x"], obj["y"], obj["l"], obj["w"], obj["h"], obj["direction"]]).float() for obj in ts_data])
+      boxes   = torch.stack([torch.tensor([obj["x"], obj["y"], obj["l"], obj["w"], obj["h"], obj["direction"]]).float() for obj in frame_data.values()])
       boxes.shape >>> [n_boxes,6]
       
 Now we can convert from state formulation (x,y,l,w,h) to space formulation (coordinates for fbr,fbl,bbr,bbl,ftr,ftl,fbr,fbl corners in 3-space) (front bottom right, front bottom left, back bottom left, back bottom right, etc.)
@@ -67,10 +67,10 @@ These boxes should closely align with the corresponding original boxes in `boxes
 
 A few other attributes we can access from the `Scene` object:
       
-      \# get timestamps for frame set i
+      # get timestamps for frame set i
       sc.all_ts[i]
 
-      \# interpolate the positions for all objects (as represented by continuous splines, see paper) at time `t`:
+      # interpolate the positions for all objects (as represented by continuous splines, see paper) at time `t`:
       sc.spl_boxes(t)
 
 Next let's check out the interactive viewer/annotator function:
