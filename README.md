@@ -7,9 +7,17 @@ paper: https://arxiv.org/pdf/2308.14833.pdf
 
 
 ## Requirements
-It's just data, there are no requirements...
-But more realistically, if you want to use the utilities provided in this repository, you'll need some basic python libraries:
+To use just the dataset itself, there are no specific requirements. To use the basic python scripts provided in this repository, you'll need a few python libraries:
+- `pytorch`
+- `numpy`
+- `cv2`
 
+
+## Notes
+- `cv2`-based video decoding is painfully slow (decoding 16ish 4k video buffers on cpu generally proceeds at less than 1 fps). Moreover, cv2 `VideoCapture` objects don't provide an easy way to jump to a point in the video, so you're stuck retrieving each frame to get to later frames. For faster decoding (~10 fps) you can write an asynchronous loader or try out [Nvidia's VPF library](https://github.com/NVIDIA/VideoProcessingFramework) for GPU side decoding directly into pytorch tensors. This library isn't utilized in this work because the installation can be quite painful and has soft-failure dependencies.
+- Buffered 4K frames quickly fill memory, making this dataset a bit of a pain to work with in video form. 
+- For speed and buffer memory reasons, it is recommended to save frames to disk using the provided script whenever working with data from a single frame or batches of single frames at a time.
+  
 
 ## TODO
 - [X] Save annotations as flat file
