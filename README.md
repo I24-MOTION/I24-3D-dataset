@@ -6,7 +6,7 @@ This work is to appear at BMVC 2023. The preprint is available here: https://arx
 
 ![ ](readme_im/tile.png)
 
-If you use this code or data, please cite this work and/or give the repo a star! Untold hours were put into this project and, while far from perfect, I am fairly happy with the pytorch-backended homography class (in `homography.py`) for managing many objects across many camera fields of view, and the openCV-backend video annotation framework (in `scene.py`), which is quite nicely extensible to various annotation regime after years of iteration on my part.
+If you use this code or data, please cite this work and/or give the repo a star! 
 
     @article{gloudemans2023i24dataset,
       title={The Interstate-24 3D Dataset: a new benchmark for 3D multi-camera vehicle tracking},
