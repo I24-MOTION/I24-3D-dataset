@@ -2,7 +2,7 @@
 ## Preliminaries
 This repository provides basic example data usage utilities for the I-24 Multi-Camera 3D Dataset (I24-3D). The dataset is comprised of 3 scenes (sets of videos recorded at the same time from different cameras), recorded at 4K resolution and 30 frames per second across 16-17 cameras with dense viewpoints covering 2000 feet of interstate roadway near Nashville, TN. . Vehicle 3D bounding boxes are annotated by hand for 720 unique vehicles (over 877,000 3D vehicle bounding boxes annotated in total). I24-3D is the first 3D multiple-camera tracking dataset in a traffic monitoring context from real videos.
 
-This work is to appear at BMVC 2023. The preprint is available here: https://arxiv.org/pdf/2308.14833.pdf
+This work is to appear at BMVC 2023. The preprint is available here: https://arxiv.org/pdf/2308.14833.pdf. Data will be made available at https://i24motion.org/.
 
 ![ ](readme_im/tile.png)
 
