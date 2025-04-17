@@ -14,11 +14,149 @@ import numpy as np
 import cv2
 import torch
 
+import PyNvCodec as nvc
+import PytorchNvCodec as pnvc
 
 
 
+def load_queue_vpf(q,sequence,gpuID,buffer_size,resize,start_frame):
+        print("device id: {}".format(gpuID))
 
+        resize = (resize[1],resize[0])
+        # device = torch.cuda.device("cuda:{}".format(gpuID))
+        file = sequence
+        
+        # initialize Decoder object
+        nvDec = nvc.PyNvDecoder(file, gpuID)
+        target_h, target_w = nvDec.Height(), nvDec.Width()
+    
+        to_rgb = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvc.PixelFormat.NV12, nvc.PixelFormat.RGB, gpuID)
+        to_planar = nvc.PySurfaceConverter(nvDec.Width(), nvDec.Height(), nvc.PixelFormat.RGB, nvc.PixelFormat.RGB_PLANAR, gpuID)
+    
+    
+        cspace, crange = nvDec.ColorSpace(), nvDec.ColorRange()
+        if nvc.ColorSpace.UNSPEC == cspace:
+            cspace = nvc.ColorSpace.BT_601
+        if nvc.ColorRange.UDEF == crange:
+            crange = nvc.ColorRange.MPEG
+        cc_ctx = nvc.ColorspaceConversionContext(cspace, crange)
+        
+        
+        # get frames from one file
+        frame_counter = -1
+        while True:
+            if q.qsize() < buffer_size:
+                
+                
+                # Obtain NV12 decoded surface from decoder;
+                raw_surface = nvDec.DecodeSingleSurface()#pkt)
+                if raw_surface.Empty():
+                    break
+                
+                # used to skip to frame 
+                frame_counter += 1
+                if frame_counter < start_frame:
+                    continue
+    
+                # Convert to RGB interleaved;
+                rgb_byte = to_rgb.Execute(raw_surface, cc_ctx)
+            
+                # Convert to RGB planar because that's what to_tensor + normalize are doing;
+                rgb_planar = to_planar.Execute(rgb_byte, cc_ctx)
+    
 
+            
+                # likewise, end of video file
+                if rgb_planar.Empty():
+                    break
+                
+                rgb_planar = rgb_planar.Clone(gpuID)
+                
+                # del rgb_byte
+                
+                # Create torch tensor from it and reshape because
+                # pnvc.makefromDevicePtrUint8 creates just a chunk of CUDA memory
+                # and then copies data from plane pointer to allocated chunk;
+                surfPlane = rgb_planar.PlanePtr()
+                # del rgb_planar
+                
+                surface_tensor = pnvc.makefromDevicePtrUint8(surfPlane.GpuMem(), surfPlane.Width(), surfPlane.Height(), surfPlane.Pitch(), surfPlane.ElemSize())
+                del surfPlane
+                
+                surface_tensor.resize_(3, target_h,target_w)
+                
+                try:
+                    surface_tensor = torch.nn.functional.interpolate(surface_tensor.unsqueeze(0),resize).squeeze(0)
+                except:
+                    raise Exception("Surface tensor shape:{} --- resize shape: {}".format(surface_tensor.shape,resize))
+            
+                # This is optional and depends on what you NN expects to take as input
+                # Normalize to range desired by NN. Originally it's 
+                surface_tensor = surface_tensor.type(dtype=torch.cuda.FloatTensor)
+                surface_tensor = surface_tensor.permute(1,2,0).data.cpu().numpy().astype(np.uint8)[:,:,::-1].copy()
+                
+                # apply normalization
+                #surface_tensor = F.normalize(surface_tensor,mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                
+                frame = surface_tensor
+                q.put(frame)
+
+class Camera_Wrapper_vpf():
+    """
+    Small wrapper around cv2.VideoCapture object that also maintains timestamp
+    """
+    
+    def __init__(self,sequence,ctx,ds = 2,gpu = 0,start_frame = 0):
+        self.cap = cv2.VideoCapture(sequence)
+        self.ds = ds
+        
+        #checksum_path="/home/worklab/Documents/derek/I24-video-processing/I24-video-ingest/resources/timestamp_pixel_checksum_6.pkl"
+        #geom_path="/home/worklab/Documents/derek/I24-video-processing/I24-video-ingest/resources/timestamp_geometry_4K.pkl"
+       
+        
+        self.frame = None
+        self.name = re.search("p\dc\d",sequence).group(0)
+        
+        self.all_ts = []
+    
+        self.running_frame = None
+        
+
+        
+        # create shared queue
+        resize = (3840,2160)
+        self.queue = ctx.Queue()
+        self.worker = ctx.Process(target=load_queue_vpf, args=(self.queue,sequence,gpu,20,resize,start_frame))
+        self.worker.start()   
+         
+    def __next__(self):
+        
+        try:
+            frame = self.queue.get(timeout = 20)
+            im = frame
+            
+        except:
+            im = None
+        
+        self.frame = im
+        
+        if self.running_frame is None:
+            self.running_frame = self.frame
+        else:
+            self.running_frame = 0.95*self.running_frame + 0.05*self.frame
+            
+    def release(self):
+        self.cap.release()
+        
+    def __len__(self):
+        return int(self.cap.get(7))    
+    
+    def skip(self,count):
+        for i in range(count):
+            next(self)
+        next(self)
+    
+        
 class Camera_Wrapper():
     """
     Small wrapper around cv2.VideoCapture object that also maintains timestamp

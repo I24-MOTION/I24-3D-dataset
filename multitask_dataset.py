@@ -13,7 +13,7 @@ from PIL import Image
 from torch.utils import data
 from torchvision import transforms
 import time
-
+import re
 
 def pil_to_cv(pil_im):
     """ convert PIL image to cv2 image"""
@@ -83,9 +83,10 @@ class I24_Dataset(data.Dataset):
 
             self.mask_ims = {1: {},
                          2: {},
-                         3: {}}
+                         3: {},
+                         999: {}}
         
-            for scene_id in [1,2,3]:
+            for scene_id in [1,2,3,999]:
                 scene_mask_dir = os.path.join(mask_dir,"scene{}".format(scene_id))
                 mask_paths = os.listdir(scene_mask_dir)
                 for path in mask_paths:
@@ -126,24 +127,56 @@ class I24_Dataset(data.Dataset):
          
         
         
+        # self.classes = { "sedan":0,
+        #             "midsize":1,
+        #             "van":2,
+        #             "pickup":3,
+        #             "semi":4,
+        #             "truck (other)":5,
+        #             "truck": 5,
+        #             "motorcycle":6,
+        #             "trailer":7,
+        #             0:"sedan",
+        #             1:"midsize",
+        #             2:"van",
+        #             3:"pickup",
+        #             4:"semi",
+        #             5:"truck (other)",
+        #             6:"motorcycle",
+        #             7:"trailer",
+        #             }
+        
         self.classes = { "sedan":0,
                     "midsize":1,
                     "van":2,
                     "pickup":3,
-                    "semi":4,
-                    "truck (other)":5,
-                    "truck": 5,
-                    "motorcycle":6,
-                    "trailer":7,
+                    "semi_sleeper":4,
+                    "semi_nonsleeper":5,
+                    "truck": 6,
+                    "motorcycle":7,
+
                     0:"sedan",
                     1:"midsize",
                     2:"van",
                     3:"pickup",
-                    4:"semi",
-                    5:"truck (other)",
-                    6:"motorcycle",
-                    7:"trailer",
+                    4:"semi_sleeper",
+                    5:"semi_nonsleeper",
+                    6:"truck",
+                    7:"motorcycle",
                     }
+        
+        self.class_colors = [
+            (0,255,0),
+            (255,0,0),
+            (0,0,255),
+            (255,255,0),
+            (255,0,255),
+            (0,255,255),
+            (255,100,0),
+            (255,50,0),
+            (0,255,150),
+            (0,255,100),
+            (0,255,50)]
             
         self.labels = []
         self.data = []
@@ -193,6 +226,10 @@ class I24_Dataset(data.Dataset):
                         
                         # store object class
                         try:
+                            if "semi" in box["class"]:
+                                box["class"] = box["class"].split("_")[0] + "_" + box["class"].split("_")[1]
+                            elif "truck" in box["class"]:
+                                box["class"] = box["class"].split("_")[0] 
                             cls = torch.ones([1])* self.classes[box["class"]]
                         except:
                             cls = torch.zeros([1])
@@ -211,7 +248,7 @@ class I24_Dataset(data.Dataset):
                         bbox2d[3] = torch.max(bbox3d[1::2])
                         
                         state = box["box"]
-                        id = torch.ones([1])*int(str(box["id"]) + str(single_label_file.split("scene_")[1][0])) # append scene id to make ids unique across all scenes
+                        id = torch.tensor(99).unsqueeze(0)# Doesn't matter any more since we're not doing reid      torch.ones([1])*int(str(box["id"]) + str(single_label_file.split("scene_")[1][0])) # append scene id to make ids unique across all scenes
                         #reformat label so each frame is a tensor of size [n objs, label_format_length + 1] where +1 is class index
                         bbox = torch.cat((bbox3d,bbox2d,id,cls),dim = 0).float()
                         #bbox = torch.from_numpy(bbox)
@@ -302,20 +339,24 @@ class I24_Dataset(data.Dataset):
         y = self.labels[index].clone()
         im = Image.open(self.data[index])
         
+
+        
         if self.multiple_frames:
-            im_path = self.data[index]
-            im_idx = int(im_path.split(".")[0].split("/")[-1])
-            shift = np.random.randint(1,5)
-            im_idx -= shift
-            if im_idx < 0:
-                im_idx = 0
-            im_idx = str(im_idx).zfill(4)
-            prev_path = im_path
-            
-            im_idx += ".png"
-            replace = len(im_idx)
-            prev_path = "/".join((prev_path.split("/")[:-1] + [im_idx]))
-            
+            try:
+                im_path = self.data[index]
+                im_idx = int(im_path.split(".")[0].split("/")[-1])
+                shift = np.random.randint(1,5)
+                im_idx -= shift
+                if im_idx < 0:
+                    im_idx = 0
+                im_idx = str(im_idx).zfill(4)
+                prev_path = im_path
+                
+                im_idx += ".png"
+                replace = len(im_idx)
+                prev_path = "/".join((prev_path.split("/")[:-1] + [im_idx]))
+            except:
+                prev_path = im_path
             if not os.path.exists(prev_path):
                 prev_path = im_path
             prev_im = Image.open(prev_path)
@@ -332,8 +373,12 @@ class I24_Dataset(data.Dataset):
             # convert each to array to mask it
             np_im = np.array(im).astype(float)
             
-            camera = self.data[index].split("/")[-2]
-            scene_id = int(self.data[index].split("/")[-3].split("_")[-1])
+            try:
+                camera = self.data[index].split("/")[-2]
+                scene_id = int(self.data[index].split("/")[-3].split("_")[-1])
+            except:
+                camera = self.data[index].split("/")[-1].split("_")[0]
+                scene_id = 999
             
             # get mask im
             mask_im = self.mask_ims[scene_id][camera]/255
@@ -861,11 +906,14 @@ if __name__ == "__main__":
     dataset_dir = "/home/worklab/Documents/I24-3D/cache"
     mask_dir = "/home/worklab/Documents/I24-3D/data/mask"
     
-    test = I24_Dataset(dataset_dir,label_format = "8_corners",mode = "train", CROP = 0, multiple_frames=True,mask_dir = mask_dir)
+    dataset_dir = "/home/worklab/Documents/datasets/I24-3D/cache"
+    mask_dir = "/home/worklab/Documents/datasets/I24-3D/data/mask"
+    
+    test = I24_Dataset(dataset_dir,label_format = "8_corners",mode = "train", CROP = 0, multiple_frames=False,mask_dir = mask_dir,random_partition = True)
     
     
     
-    for i in range(10):
+    for i in range(100):
         idx = np.random.randint(0,len(test))
-        test.show(10)
+        test.show(idx)
     #cv2.destroyAllWindows()

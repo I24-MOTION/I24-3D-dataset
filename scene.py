@@ -10,7 +10,7 @@ To whom it may concern:
 """
 
 
-from datareader import Data_Reader, Camera_Wrapper
+from datareader import Data_Reader, Camera_Wrapper, Camera_Wrapper_vpf
 from homography import Homography_Wrapper
 import _pickle as pickle
 import time
@@ -31,6 +31,9 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
+
+import torch.multiprocessing as mp
+ctx = mp.get_context('spawn')
 
 # filter and CNNs
 
@@ -62,7 +65,7 @@ class Scene:
          for labels later down the lien
     """
 
-    def __init__(self, video_dir, data_dir, scene_id=1):
+    def __init__(self, video_dir, data_dir, scene_id=1,start_frame = 0):
 
         # # get data
         # dr = Data_Reader(data,None,metric = False)
@@ -120,8 +123,10 @@ class Scene:
         self.sequences = {}
         for idx, sequence in enumerate(os.listdir(sequence_directory)):
             if "p3c6" not in sequence or scene_id != 1:
-                cap = Camera_Wrapper(os.path.join(
-                    sequence_directory, sequence),ds=1)
+                cap = Camera_Wrapper_vpf(os.path.join(
+                    sequence_directory, sequence),ctx,ds=1,gpu = np.random.randint(0,3),start_frame = start_frame)
+                # cap = Camera_Wrapper(os.path.join(
+                #     sequence_directory, sequence),ds=1)
                 self.sequences[cap.name] = cap
 
         # # get homography
@@ -157,6 +162,8 @@ class Scene:
             ts_path = os.path.join(data_dir,"ts","scene{}_ts.csv".format(scene_id))
 
             self.load_data_csv(self.data_path)
+            #self.data = []
+            
             self.load_ts_csv(ts_path)
         except:
             print("Did not successfully reload data")
@@ -167,8 +174,9 @@ class Scene:
         try:
             spl_json_path = os.path.join(data_dir,"spl_obj","scene{}_splobj.json".format(scene_id))
             with open(spl_json_path,"r") as f:
-                self.spline_data = json.load(f)
+                #self.spline_data = json.load(f)
                 print("Loaded {} as spline object data".format(spl_json_path))
+                self.spline_data = []
 
         except:
             print("Did not successfully reload spline object data")
@@ -185,12 +193,14 @@ class Scene:
         #         self.data = self.data[1:]
 
         # get first frames from each camera according to first frame of data
+        self.frame_idx = start_frame
+        
         self.buffer_frame_idx = -1
-        self.buffer_lim = 100
+        self.buffer_lim = 500
         self.last_frame = 2700
-        self.buffer = []
+        self.buffer = [[] for _ in range(start_frame)]
 
-        self.frame_idx = 0
+       
         self.advance_all()
 
         self.cont = True
@@ -198,7 +208,7 @@ class Scene:
         self.clicked = False
         self.clicked_camera = None
         self.TEXT = True
-        self.LANES = True
+        self.LANES = False
 
         self.active_command = "DIMENSION"
         self.right_click = False
@@ -227,7 +237,7 @@ class Scene:
         self.ranges = ranges
 
         
-        self.MASK = True
+        self.MASK = False
         self.mask_ims = {}
         mask_dir = os.path.join(data_dir,"mask","scene{}".format(scene_id))
         mask_paths = os.listdir(mask_dir)
@@ -239,7 +249,17 @@ class Scene:
 
                 self.mask_ims[key] = im
                 
-        
+    def correct_curve(self):
+        for p in [1,3]:
+            try:
+                self.hg.hg2.correspondence["p{}c4".format(p)]["curve"] = self.hg.hg1.correspondence["p{}c4".format(p)]["curve"]
+            except:
+                print("Could not correct curve porams for p{}c4".format(p))
+        for p in [2]:
+            try:
+                self.hg.hg2.correspondence["p{}c3".format(p)]["curve"] = self.hg.hg1.correspondence["p{}c3".format(p)]["curve"]
+            except:
+                print("Could not correct curve porams for p{}c3".format(p))
 
     def safe(self, x):
         """
@@ -261,14 +281,16 @@ class Scene:
 
         data = self.data
 
-        header = ["camera","id","x","y","l","w","h","direction","class","gen"] 
+        header = ["camera","id","x","y","l","w","h","direction","class","gen","cab_length"] 
         
         
         all_rows = []
         for fidx,frame_data in enumerate(data):
                 
             for obj in frame_data.values():
-                
+                if "cab_length" not in obj.keys():
+                    obj["cab_length"] = 0
+                    
                 row = [fidx] 
                 for key in header:
                     try:
@@ -316,7 +338,7 @@ class Scene:
             for kidx,key in enumerate(headers):
             
                 datum[key] = line[kidx]
-                if key in ["x","y","l","w","h"]:
+                if key in ["x","y","l","w","h","cab_length"]:
                     datum[key] = float(datum[key])
                 elif key in ["frame","id","direction"]:
                     datum[key] = int(datum[key])
@@ -487,8 +509,8 @@ class Scene:
             camera = self.cameras[i]
             #cam_ts_bias = self.ts_bias[i]  # TODO!!!
 
-            frame = self.buffer[self.buffer_frame_idx][i]
-            frame = frame.copy()
+            frame = self.buffer[self.buffer_frame_idx][i].copy()
+            # frame = frame.copy() * 0 + 255
             frame_ts = self.all_ts[self.frame_idx][camera.name]
             
             # get frame objects
@@ -504,6 +526,11 @@ class Scene:
                 filter(lambda x: x["gen"] == "spline", ts_data))
             ts_data = list(filter(lambda x: x["gen"] != "spline", ts_data))
 
+            cabs = []
+            for item in ts_data:
+                if "cab_length" in item.keys() and item["cab_length"] > 0:
+                    cabs.append(item)
+            
             if False:
                 ts_data = [self.offset_box_y(copy.deepcopy(
                     obj), reverse=True) for obj in ts_data]
@@ -523,6 +550,17 @@ class Scene:
                 # plot on frame
                 frame = self.hg.plot_state_boxes(frame, boxes, name=camera.name, color=(
                     0, 150, 0), secondary_color=(0, 150, 0), thickness=2, jitter_px=0)
+                
+                if True and len(cabs) > 0:
+                    ### Cab boxes
+                    boxes2 = torch.stack([torch.tensor([item["x"]+item["l"]*item["direction"] - item["cab_length"]*item["direction"],item["y"],item["cab_length"],item["w"],item["h"],item["direction"]]).float() for item in cabs])
+    
+    
+    
+                    # plot on frame
+                    frame = self.hg.plot_state_boxes(frame, boxes2, name=camera.name, color=(
+                        0, 150, 150), secondary_color=(0, 150, 150), thickness=2, jitter_px=0)
+
 
                 # plot labels
                 if self.TEXT:
@@ -545,7 +583,7 @@ class Scene:
                 im_boxes = self.hg.state_to_im(boxes, name=camera.name)
                 # plot on frame
                 frame = self.hg.plot_state_boxes(frame, boxes, name=camera.name, color=(
-                    0, 150, 150), secondary_color=(0, 150, 150), thickness=2, jitter_px=0)
+                    0, 150, 150), secondary_color=(0, 150, 150), thickness=4, jitter_px=0)
 
             #     # plot labels for spline boxes
             #     if self.TEXT:
@@ -777,7 +815,7 @@ class Scene:
                     item["class"] = cls
                     
 
-    def dimension(self, obj_idx, box, dx=0, dy=0):
+    def dimension(self, obj_idx, box, dx=0, dy=0,cab = False):
         """
         Adjust relevant dimension in all frames based on input box. Relevant dimension
         is selected based on:
@@ -809,8 +847,17 @@ class Scene:
             h = self.data[self.frame_idx][key]["h"]
         except:
             return
+        
+        try:
+            cab_length = self.data[self.frame_idx][key]["cab_length"]
+        except:
+            cab_length = 0
 
-        if self.right_click:
+        if cab:
+            relevant_change = max(0,dx + cab_length)
+            relevant_key = "cab_length"
+            
+        elif self.right_click:
             relevant_change = dh + h
             relevant_key = "h"
         elif np.abs(dx) > np.abs(dy):
@@ -1063,7 +1110,7 @@ class Scene:
 
     def keyboard_input(self):
         keys = ""
-        letters = string.ascii_lowercase + string.digits
+        letters = string.ascii_lowercase + string.digits + "_"
         while True:
             key = cv2.waitKey(1)
             for letter in letters:
@@ -1331,7 +1378,8 @@ class Scene:
 
 
     def offset_box_y(self, box, reverse=False):
-
+        return box
+    
         camera = box["camera"]
         direction = box["direction"]
 
@@ -1666,7 +1714,14 @@ class Scene:
                 if key == ord("2") or key == 178:
                     self.dimension(self.copied_box[0], None, dy=-nudge)
                     self.plot()
-
+                if key == ord("0"):
+                    nudge = 1
+                    self.dimension(self.copied_box[0],None,dx = -nudge,cab = True)
+                    self.plot()
+                if key == ord("."):
+                    nudge = 1
+                    self.dimension(self.copied_box[0],None,dx = nudge,cab = True)
+                    self.plot()
 
 #%% Here's a bunch of garbage you probably don't need but I left just in case it 
 # inspires some good ideas for you
@@ -2753,9 +2808,14 @@ def plot_deltas(ann, cam="p1c5"):
 
 #%%
 if __name__ == "__main__":
-
-    video_dir = "/home/worklab/Documents/I24-3D/video"
-    data_dir  = "/home/worklab/Documents/I24-3D/data"
-    ann = Scene(video_dir,data_dir,scene_id = 1)
-    ann.fill_buffer(10)    
+        
+    from i24_rcs import I24_RCS
+    rcs  = I24_RCS("test.cpkl",aerial_ref_dir="/home/worklab/Documents/datasets/I24-3D/rcs_1/aerial_ref_1",im_ref_dir="/home/worklab/Documents/datasets/I24-3D/rcs_1/cam_ref_1",downsample = 1,default = "reference",MC3D = True)
+    
+    video_dir = "/home/worklab/Documents/datasets/I24-3D/video"
+    data_dir  = "/home/worklab/Documents/datasets/I24-3D/data"
+    
+    ann = Scene(video_dir,data_dir,scene_id = 1,start_frame = 2200)
+    ann.correct_curve()
+    ann.fill_buffer(50)    
     ann.run()
