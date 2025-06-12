@@ -83,7 +83,7 @@ def test_detector_video(retinanet,video_path,dataset,break_after = 12000,detect_
                 scores,labels,boxes,_ = retinanet(im)
              
             if len(boxes) > 0:
-                keep = torch.where(scores > 0.5,1,0).nonzero().squeeze(1)
+                keep = torch.where(scores > 0.3,1,0).nonzero().squeeze(1)
                 boxes = boxes[keep,:].cpu()
                 scores = scores[keep].cpu()
                 labels = labels[keep].cpu().data.numpy()
@@ -129,74 +129,77 @@ def test_detector_video(retinanet,video_path,dataset,break_after = 12000,detect_
                 cv2.putText(cv_im,dataset.classes[labels[bidx]],(int(top),int(left)),cv2.FONT_HERSHEY_SIMPLEX,1,color,thickness)
                 
             cv2.imshow("Frame",cv_im)
-            #cv2.imwrite("/home/worklab/Documents/i24/I24-3D-dataset/temp_vid_out/{}.png".format(str(i).zfill(5)), cv_im)
+            cv2.imwrite("/home/worklab/Documents/i24/I24-3D-dataset/temp_vid_out/{}.png".format(str(i).zfill(5)), cv_im)
             key = cv2.waitKey(1)
             if key == ord("q"):
                 break
     
-    else:
-        cap.grab()
+        else:
+            cap.grab()
             
     cv2.destroyAllWindows()
     cap.release()
     
     with open("newtruck_detections_P27C01.cpkl","wb") as f:
         pickle.dump(all_data,f)
+        
+    ravel_to_npy(all_data = all_data)
 
-def ravel_to_npy():
-    with open("newtruck_detections_P27C01.cpkl","rb") as f:
-        all_data = pickle.load(f)
+def ravel_to_npy(all_data = None):
+    if all_data is None:
+        with open("newtruck_detections_P27C01.cpkl","rb") as f:
+            all_data = pickle.load(f)
         
         
-        # load v3 homography
-        from i24_rcs import I24_RCS
-        rcs = I24_RCS("/home/worklab/Documents/i24/I24-3D-dataset/hg_67e62dfd1ffd2fe3d61ee2d0.cpkl",default = "reference",downsample = 2)
+    # load v3 homography
+    from i24_rcs import I24_RCS
+    rcs = I24_RCS("/home/worklab/Documents/i24/I24-3D-dataset/hg_67e62dfd1ffd2fe3d61ee2d0.cpkl",default = "reference",downsample = 2)
+    
+    
+    # test = torch.arange(0,50000,step = 100)
+    # test2 = torch.arange(-120,120,step = 12)
+    # test = test.unsqueeze(1).expand(test.shape[0],test2.shape[0])
+    # test2 = test2.unsqueeze(0).expand(test.shape)
+    # test = test.reshape(-1)
+    # test2 = test2.reshape(-1)
+    # points = torch.stack([test,test2,test2*0,test2*0,test2*0,torch.sign(test2)]).transpose(1,0).contiguous()
+    # space_pts = rcs.state_to_space(points)
+    
+    # plt.scatter(space_pts[:,0,0],space_pts[:,0,1],color = "k")
+    det = np.empty([0,8])
+    
+    # map each to state form
+    for frame_data in all_data:
+        fidx = frame_data[0]
+        boxes = frame_data[1]
+        scores = frame_data[2]
+        labels = torch.from_numpy(frame_data[3])
+    
         
+        # convert boxes to [n_deteections,8,2]
         
-        # test = torch.arange(0,50000,step = 100)
-        # test2 = torch.arange(-120,120,step = 12)
-        # test = test.unsqueeze(1).expand(test.shape[0],test2.shape[0])
-        # test2 = test2.unsqueeze(0).expand(test.shape)
-        # test = test.reshape(-1)
-        # test2 = test2.reshape(-1)
-        # points = torch.stack([test,test2,test2*0,test2*0,test2*0,torch.sign(test2)]).transpose(1,0).contiguous()
-        # space_pts = rcs.state_to_space(points)
+        detections = boxes.view(-1,10,2)
+        boxes = detections[:,:8,:] # drop 2D boxes
         
-        # plt.scatter(space_pts[:,0,0],space_pts[:,0,1],color = "k")
-        det = np.empty([0,8])
+        #boxes = boxes.view(-1,8,2) # this step may be wrong
+        boxes_state = rcs.im_to_state(boxes, name = ["P27C01" for _ in boxes],classes = labels)
+        #plt.scatter(boxes_state[:,0,0],boxes_state[:,0,1])
+        #add time
+        time = torch.zeros([boxes.shape[0],1]) + fidx* 0.0333
         
-        # map each to state form
-        for frame_data in all_data:
-            fidx = frame_data[0]
-            boxes = frame_data[1]
-            scores = frame_data[2]
-            labels = torch.from_numpy(frame_data[3])
+        # add conf and class
+        boxes_final = torch.cat((time,boxes_state[:,:5],labels.unsqueeze(1),scores.unsqueeze(1)),dim = 1).data.numpy()
         
-            
-            # convert boxes to [n_deteections,8,2]
-            
-            detections = boxes.view(-1,10,2)
-            boxes = detections[:,:8,:] # drop 2D boxes
-            
-            #boxes = boxes.view(-1,8,2) # this step may be wrong
-            boxes_state = rcs.im_to_state(boxes, name = ["P27C01" for _ in boxes],classes = labels)
-            #plt.scatter(boxes_state[:,0,0],boxes_state[:,0,1])
-            #add time
-            time = torch.zeros([boxes.shape[0],1]) + fidx* 0.0333
-            
-            # add conf and class
-            boxes_final = torch.cat((time,boxes_state[:,:5],labels.unsqueeze(1),scores.unsqueeze(1)),dim = 1).data.numpy()
-            
+    
+        det = np.concatenate((det,boxes_final),axis = 0)
+        print(fidx)
         
-            det = np.concatenate((det,boxes_final),axis = 0)
-            print(fidx)
-            
-            #plt.scatter(det[:,1],det[:,2])
+        #plt.scatter(det[:,1],det[:,2])
 
-        # time x y l w h class confidenc,e original id clustered id
-        np.save("example_detections_P27C01.npy",det)
-        
-        print("X-range: {} {}".format(np.min(det[:,1]),np.max(det[:,1])))
+    # time x y l w h class confidenc,e original id clustered id
+    np.save("detections_{}.npy".format(name),det)
+    
+    print("X-range: {} {}".format(np.min(det[:,1]),np.max(det[:,1])))
 
 def smooth_tracklets(file):
     def traj_to_tensor(traj,cls = -1):
@@ -385,19 +388,19 @@ def md_iou(a,b):
     return iou
 
 
-def get_metrics(confusion_matrix):
+def get_metrics(confusion_matrix,n_classes):
     
     #plot confusion matrix
     sums = np.sum(confusion_matrix,axis= 0)
     sumss = sums[:,np.newaxis]
-    sumss = np.repeat(sumss,8,1)#.transpose()
+    sumss = np.repeat(sumss,n_classes,1)#.transpose()
     sumss = np.transpose(sumss)
     percentages = np.round(confusion_matrix/sumss * 100)
     
     fig, ax = plt.subplots(figsize = (10,10))
     im = ax.imshow(percentages,cmap = "YlGn")
     
-    classes = [val_data.classes[i] for i in range (0,8)]
+    classes = [val_data.classes[i] for i in range (0,n_classes)]
     
     # We want to show all ticks...
     ax.set_xticks(np.arange(len(classes)))
@@ -426,13 +429,13 @@ def get_metrics(confusion_matrix):
     plt.show()
     
     # get overall accuracy
-    correct = sum([confusion_matrix[i,i] for i in range(0,8)])
+    correct = sum([confusion_matrix[i,i] for i in range(0,n_classes)])
     total = np.sum(confusion_matrix)
     accuracy = correct/total
     print("Test accuracy: {}%".format(accuracy*100))
 
     # get per-class recall (correct per class/ number of items in this class)    
-    correct_per_class = np.array([confusion_matrix[i,i] for i in range(0,8)])
+    correct_per_class = np.array([confusion_matrix[i,i] for i in range(0,n_classes)])
     recall = correct_per_class/sums
     
     total_preds_per_class = np.sum(confusion_matrix,axis= 1)
@@ -452,9 +455,13 @@ if True: # Resnet34 with multiple frames and embedding
     
     # load detector
     depth = 34
-    num_classes = 8
+    num_classes = 10
     checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/truck_running_checkpoint_retrain.pt" # highly trained
-    #checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/truck_running_checkpoint_save.pt" #old
+    #checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/truck_running_checkpoint_orig.pt" #old
+    #checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/truck_running_anchor.pt"
+    checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/truck_running_checkpoint_cab_50.pt"
+    checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/multi_model34_e8_0.pt"
+    checkpoint_file = "/home/worklab/Documents/i24/I24-3D-dataset/cp/truck_running_checkpoint_cab_90.pt"
     
     # Create the model
     if depth == 18:
@@ -507,13 +514,14 @@ val_data = I24_Dataset(data_dir,label_format = "8_corners",mode = "test", CROP =
 
 
 #%% Run evaluation
-sigma_min = 0.25
+sigma_min = 0.3
 iou_min   = 0.2
-nms_iou   = 0.1
+nms_iou   = 0.4
 n_samples = len(val_data)
 CROP      = 0
+n_classes = num_classes 
 
-if True:
+if False:
     FP = 0
     FN = 0
     TP = 0
@@ -526,10 +534,10 @@ if True:
     start = time.time()
     print("Starting test with min confidence {}, min IOU {}, and {} samples".format(sigma_min,iou_min,n_samples))
     
-    conf_matrix = np.zeros([8,8])
+    conf_matrix = np.zeros([n_classes,n_classes])
     
-    obj_count = np.zeros(8)
-    obj_ious = np.zeros([8,19]) # 0.05 - 1 by 0.05
+    obj_count = np.zeros(n_classes)
+    obj_ious = np.zeros([n_classes,19]) # 0.05 - 1 by 0.05
     
     # load up those sweet sweet homographies
     # load v3 homography
@@ -630,7 +638,7 @@ if True:
                  classes = classes[keep]
                  boxes  = boxes[keep]
                  embeddings = embeddings[keep]
-        
+                 
              # im space nms
              if len(boxes) > 0:
                 boxes_new = torch.zeros(boxes.shape[0],4,device = device)
@@ -645,6 +653,58 @@ if True:
                 classes = classes[keep]
                 boxes  = boxes[keep]
                 embeddings = embeddings[keep]
+             
+                
+             
+             if False:
+                bboxes = boxes.clone() # for plotting 
+                bboxes = bboxes.view(bboxes.shape[0],-1)
+                im = val_data.denorm(im[0,:3])
+                cv_im = np.array(im.cpu()) 
+                cv_im = np.clip(cv_im, 0, 1)
+            
+                # Convert RGB to BGR 
+                cv_im = cv_im[::-1, :, :]  
+                cv_im = cv_im.transpose((1,2,0))*255 
+                cv_im = cv_im.astype(np.uint8)
+                cv_im = cv_im.copy()
+            
+                thickness = 1
+                for bidx,bbox in enumerate(bboxes):
+                    thickness = 2
+                    
+                    color = val_data.class_colors[classes[bidx].item()]
+                    if classes[bidx] not in [4,5,6]:
+                        color = (200,200,200)
+                        thickness = 1
+                    
+                    bbox = bbox.int().data.cpu().numpy()
+                    cv2.line(cv_im,(bbox[0],bbox[1]),(bbox[2],bbox[3]), color, thickness)
+                    cv2.line(cv_im,(bbox[0],bbox[1]),(bbox[4],bbox[5]), color, thickness)
+                    cv2.line(cv_im,(bbox[2],bbox[3]),(bbox[6],bbox[7]), color, thickness)
+                    cv2.line(cv_im,(bbox[4],bbox[5]),(bbox[6],bbox[7]), color, thickness)
+                    
+                    cv2.line(cv_im,(bbox[8],bbox[9]),(bbox[10],bbox[11]), color, thickness)
+                    cv2.line(cv_im,(bbox[8],bbox[9]),(bbox[12],bbox[13]), color, thickness)
+                    cv2.line(cv_im,(bbox[10],bbox[11]),(bbox[14],bbox[15]), color, thickness)
+                    cv2.line(cv_im,(bbox[12],bbox[13]),(bbox[14],bbox[15]), color, thickness)
+                    
+                    cv2.line(cv_im,(bbox[0],bbox[1]),(bbox[8],bbox[9]), color, thickness)
+                    cv2.line(cv_im,(bbox[2],bbox[3]),(bbox[10],bbox[11]), color, thickness)
+                    cv2.line(cv_im,(bbox[4],bbox[5]),(bbox[12],bbox[13]), color, thickness)
+                    cv2.line(cv_im,(bbox[6],bbox[7]),(bbox[14],bbox[15]), color, thickness)
+                    
+                    # put text label at top left
+                    top = np.min(bbox[::2])
+                    left = np.min(bbox[1::2])
+                    cv2.putText(cv_im,val_data.classes[classes[bidx].item()],(int(top),int(left)),cv2.FONT_HERSHEY_SIMPLEX,1,color,thickness)
+                    
+                cv2.imshow("Frame",cv_im)
+                #cv2.imwrite("/home/worklab/Documents/i24/I24-3D-dataset/temp_vid_out/{}.png".format(str(i).zfill(5)), cv_im)
+                key = cv2.waitKey(500)
+                if key == ord("q"):
+                    break
+             
                 
              if False: #2D comparison
                  # convert outputs to 2D bbox
@@ -849,7 +909,7 @@ if True:
     print("Inference Time (ms): {:.0f}".format(inf_time/n_samples * 1000))
     
     # plot confusion matrix
-    get_metrics(conf_matrix)
+    get_metrics(conf_matrix,n_classes)
 
     # plot iou curve
     plt.figure(figsize = (10,10))
@@ -867,15 +927,20 @@ if True:
     plt.legend(["{} - ({}) samples".format(val_data.classes[i],int(obj_count[i])) for i in range(len(obj_count))] + ["Mean- ({}) samples".format(int(obj_count.sum()))])
     plt.xlabel("Min required IOU")
     plt.ylabel("Recall")
-    plt.title("Recall at Varying IOU Thresholds by Class, New")
+    plt.ylim([0,1])
+    plt.xlim([0,1])
+    plt.title("Recall at Varying IOU Thresholds by Class, {}".format(checkpoint_file.split("/")[-1]))
     
 
 
 #%%
 # load a video and detect in it
-if False:
+if True:
 
     video_path = "/home/worklab/Desktop/temp_vid/P22C01_1744718342.47871.mkv"
+    video_path = "/home/worklab/Desktop/temp_vid/wave-crash/use/P48C04_1741176549.503338.mkv"
+    video_path = "/home/worklab/Desktop/temp_vid/2025-04-21-wavecrash/P11C04_1745233145.315573.mkv"
+    #video_path = "/home/worklab/Desktop/temp_vid/wave-crash/P30C06_1741184338.957852.mkv"
     test_detector_video(retinanet,video_path,val_data,break_after = 8000)
     
 if False:

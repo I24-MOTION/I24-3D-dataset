@@ -12,8 +12,7 @@ import cv2
 from PIL import Image
 from torch.utils import data
 from torchvision import transforms
-import time
-import re
+
 
 def pil_to_cv(pil_im):
     """ convert PIL image to cv2 image"""
@@ -154,6 +153,8 @@ class I24_Dataset(data.Dataset):
                     "semi_nonsleeper":5,
                     "truck": 6,
                     "motorcycle":7,
+                    "trailer_sem":9,
+                    "trailer":8,
 
                     0:"sedan",
                     1:"midsize",
@@ -163,6 +164,8 @@ class I24_Dataset(data.Dataset):
                     5:"semi_nonsleeper",
                     6:"truck",
                     7:"motorcycle",
+                    8:"trailer",
+                    9:"trailer_sem"
                     }
         
         self.class_colors = [
@@ -382,7 +385,7 @@ class I24_Dataset(data.Dataset):
             
             # get mask im
             mask_im = self.mask_ims[scene_id][camera]/255
-            blur_im = cv2.blur(np_im, (17, 17)).astype(float)
+            blur_im = cv2.blur(np_im, (31, 31)).astype(float)
             
             np_im = np_im*mask_im + blur_im * (1-mask_im)
 
@@ -390,7 +393,7 @@ class I24_Dataset(data.Dataset):
             
             if self.multiple_frames:
                 prev_np_im = np.array(prev_im).astype(float)
-                blur_prev_im = cv2.blur(prev_np_im, (17, 17)).astype(float)
+                blur_prev_im = cv2.blur(prev_np_im, (31, 31)).astype(float)
                 prev_np_im = prev_np_im*mask_im + blur_prev_im * (1-mask_im)
                 prev_im = Image.fromarray(prev_np_im.astype(np.uint8))
 
@@ -903,11 +906,16 @@ if __name__ == "__main__":
     #### Test script here
     
 #%%   
-    dataset_dir = "/home/worklab/Documents/I24-3D/cache"
-    mask_dir = "/home/worklab/Documents/I24-3D/data/mask"
+    # dataset_dir = "/home/worklab/Documents/I24-3D/cache"
+    # mask_dir = "/home/worklab/Documents/I24-3D/data/mask"
     
     dataset_dir = "/home/worklab/Documents/datasets/I24-3D/cache"
     mask_dir = "/home/worklab/Documents/datasets/I24-3D/data/mask"
+    
+    dataset_dir = "/home/worklab/Documents/datasets/3D_for_reece"
+    mask_dir = "/home/worklab/Documents/datasets/3D_for_reece/mask"
+    
+    
     
     test = I24_Dataset(dataset_dir,label_format = "8_corners",mode = "train", CROP = 0, multiple_frames=False,mask_dir = mask_dir,random_partition = True)
     

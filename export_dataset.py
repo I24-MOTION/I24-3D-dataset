@@ -50,7 +50,7 @@ def create_summary(directories,out_dir):
         pickle.dump(all_data,f)
     print("Saved dataset summary with {} items at {}".format(len(all_data),save_label_path))
 
-def cache_frames(ann,output_directory, start_frame = 0,how_many = 8,append_extra = False):
+def cache_frames(ann,output_directory, start_frame = 0,how_many = 8,append_extra = False,write_frames = True):
     
     if not append_extra:
         # for each frame idx
@@ -69,26 +69,67 @@ def cache_frames(ann,output_directory, start_frame = 0,how_many = 8,append_extra
                     cam_name = ann.cameras[c_idx].name
                     
                     # get set of objects labeled within that camera
-                    ts_data = list(ann.data[ann.frame_idx].values())
+                    ts_data = list(ann.data[f_idx].values())
                     ts_data = list(filter(lambda x: x["camera"] == camera.name,ts_data))
                     
                     if len(ts_data) == 0:
                         continue
                     ids = [item["id"] for item in ts_data]
                     if len(ts_data) > 0:
-                        boxes = torch.stack([torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() for obj in ts_data])
+                        if False: #--------------------------------------------------------------------------------------------------------------------------------------------- single or double box for trailers
+                            boxes = torch.stack([torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() for obj in ts_data])
+                            # convert into image space
+                            im_boxes = ann.hg.state_to_im(boxes,name = camera.name)
+                            
+                            for i in range (len(ts_data)):
+                                # for each object, append the image-space box to the ts_data annotation
+                                ts_data[i]["im_box"] = im_boxes[i]
+                                ts_data[i]["box"] = boxes[i]
+                                ts_data[i]["frame_idx"] = f_idx
+                                if "gen" not in ts_data[i].keys(): ts_data[i]["gen"] = "Manual"
+                                cam_frame_annotations.append(ts_data[i])
                         
-                        # convert into image space
-                        im_boxes = ann.hg.state_to_im(boxes,name = camera.name)
+                        else:
+                            # separate cab and trailer boxes
+                            trailers = []
+                            for obj in ts_data:
+                                if obj["cab_length"] > 0:
+                                    item = obj
+                                    front = torch.tensor([item["x"]+item["l"]*item["direction"] - item["cab_length"]*item["direction"],item["y"],item["cab_length"],item["w"],item["h"],item["direction"]]).float()
+                                    back =  torch.tensor([item["x"],item["y"],item["l"] - item["cab_length"],item["w"],item["h"],item["direction"]]).float()
+                                    front_im = ann.hg.state_to_im(front.unsqueeze(0),name = camera.name)
+                                    back_im =  ann.hg.state_to_im(back.unsqueeze(0),name = camera.name)
+                                    
+                                    obj_new = copy.deepcopy(obj)
+                                    
+                                    obj["box"] = front
+                                    obj["im_box"] = front_im
+                                    obj["frame_idx"] = f_idx
+                                    
+                                    obj_new["box"] = back
+                                    obj_new["im_box"] = back_im
+                                    obj_new["frame_idx"] = f_idx
+                                    
+                                    if "semi" in obj["class"]: # front = original, back = trailer_s
+                                        obj_new["class"] = "trailer_sem"
+                                    else:   # front = orighinal, back = trailer
+                                        obj_new["class"] = "trailer"
+
+                                    trailers.append(obj_new)
+                                    
+                                else:
+                                    box = torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() 
+                                    im_box = ann.hg.state_to_im(box.unsqueeze(0),name = camera.name)
+                                    obj["box"] = box
+                                    obj["im_box"] = im_box
+                                    obj["frame_idx"] = f_idx
+
+                            ts_data += trailers
+                            cam_frame_annotations = ts_data
+                        
+                        
+                        
                          
-                    for i in range (len(ts_data)):
-                        # for each object, append the image-space box to the ts_data annotation
-                        ts_data[i]["im_box"] = im_boxes[i]
-                        ts_data[i]["box"] = boxes[i]
-                        ts_data[i]["frame_idx"] = f_idx
-                        if "gen" not in ts_data[i].keys(): ts_data[i]["gen"] = "Manual"
-                        cam_frame_annotations.append(ts_data[i])
-                    
                     # generate image path
                     im_directory = "{}/im".format(output_directory)
                     if not os.path.exists(im_directory):
@@ -101,14 +142,15 @@ def cache_frames(ann,output_directory, start_frame = 0,how_many = 8,append_extra
                             os.mkdir(cam_directory)
                    
                     
-                   
+                                     
                     im_path = "{}/{}.png".format(cam_directory,str(f_idx).zfill(4))
-                    if not os.path.exists(im_path):
-                        frame = ann.buffer[ann.buffer_frame_idx][c_idx].copy() # second item is timestamp or dummy value
-                        frame = cv2.resize(frame,(1920,1080))
-                        cv2.imwrite(im_path,frame)
-                      
-                        
+                    if write_frames:  
+                        if not os.path.exists(im_path):
+                            frame = ann.buffer[ann.buffer_frame_idx][c_idx].copy() # second item is timestamp or dummy value
+                            frame = cv2.resize(frame,(1920,1080))
+                            cv2.imwrite(im_path,frame)
+                              
+                                
                       
                     # generate label path
                     lab_directory = "{}/label".format(output_directory)
@@ -137,7 +179,8 @@ def cache_frames(ann,output_directory, start_frame = 0,how_many = 8,append_extra
             
         
             # advance cameras
-            ann.next()
+            if write_frames:
+                ann.next()
             if f_idx % 100 == 0:
                 t_est = time.time() - start_time
                 print("Cached scene {} frame {}, {} fps cache rate".format(scene_id,f_idx,f_idx/t_est))
@@ -146,21 +189,21 @@ def cache_frames(ann,output_directory, start_frame = 0,how_many = 8,append_extra
             #     break
         
     
-    # else: # add additional bonus frames
-    #     bonus_path = "/home/worklab/Documents/datasets/more_3D_frames"
+    else: # add additional bonus frames
+        bonus_path = "/home/worklab/Documents/datasets/more_3D_frames"
         
-    #     ims = os.listdir(bonus_path + "/im")
-    #     labels = os.listdir(bonus_path + "/label_export")
+        ims = os.listdir(bonus_path + "/im")
+        labels = os.listdir(bonus_path + "/label_export")
         
-    #     for im_path in ims:
-    #         label_path = im_path.split(".png")[0] + ".cpkl"
-    #         if label_path in labels:
-    #             all_data.append([os.path.join(bonus_path, "im", im_path),os.path.join(bonus_path, "label_export", label_path)])
+        for im_path in ims:
+            label_path = im_path.split(".png")[0] + ".cpkl"
+            if label_path in labels:
+                all_data.append([os.path.join(bonus_path, "im", im_path),os.path.join(bonus_path, "label_export", label_path)])
 
      
-    # save_label_path = "{}/data_summary.cpkl".format(output_directory)
-    # with open(save_label_path,"wb") as f:
-    #     pickle.dump(all_data,f)
+    save_label_path = "{}/data_summary.cpkl".format(output_directory)
+    with open(save_label_path,"wb") as f:
+        pickle.dump(all_data,f)
     
 if __name__ == "__main__":
 
@@ -175,7 +218,7 @@ if __name__ == "__main__":
             ann.correct_curve()
             ann.buffer_lim = 10
             #ann = None
-            cache_frames(ann,output_directory = out_dir,start_frame = start_frame)
+            cache_frames(ann,output_directory = out_dir,start_frame = start_frame,write_frames = False)
             del ann
             gc.collect()
 
@@ -183,4 +226,12 @@ if __name__ == "__main__":
                    ["/home/worklab/Documents/datasets/I24-3D/cache/im/scene_2","/home/worklab/Documents/datasets/I24-3D/cache/label/scene_2"],
                    ["/home/worklab/Documents/datasets/I24-3D/cache/im/scene_3","/home/worklab/Documents/datasets/I24-3D/cache/label/scene_3"],
                    ["/home/worklab/Documents/datasets/more_3D_frames/im"      ,"/home/worklab/Documents/datasets/more_3D_frames/label_export"]]
+    
+    directories = [["/home/worklab/Documents/datasets/3D_for_reece/im/scene_1","/home/worklab/Documents/datasets/3D_for_reece/label/scene_1"],
+                   ["/home/worklab/Documents/datasets/3D_for_reece/im/scene_2","/home/worklab/Documents/datasets/3D_for_reece/label/scene_2"],
+                   ["/home/worklab/Documents/datasets/3D_for_reece/im/scene_3","/home/worklab/Documents/datasets/3D_for_reece/label/scene_3"],
+                   ["/home/worklab/Documents/datasets/3D_for_reece/im/extra","/home/worklab/Documents/datasets/3D_for_reece/label/extra"],]
+    
+    out_dir = "/home/worklab/Documents/datasets/3D_for_reece"
+    #directories = [["/home/worklab/Documents/datasets/more_3D_frames/im"      ,"/home/worklab/Documents/datasets/more_3D_frames/label_export"]]
     create_summary(directories,out_dir)

@@ -114,6 +114,7 @@ class Frame_Labeler:
                 "truck_box":[30,9,12],
                 "truck": [25,9,12],
                 "motorcycle":[7,3,4],
+                "bus":[30,9,12],
             }
         
      
@@ -181,20 +182,71 @@ class Frame_Labeler:
             
             # append im_box and box
             ts_data = self.label
-            if len(ts_data) > 0:
-                boxes = torch.stack([torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() for obj in ts_data])
+            # if len(ts_data) > 0:
+            #     boxes = torch.stack([torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() for obj in ts_data])
                 
-                # convert into image space
-                im_boxes = self.rcs.state_to_im(boxes,name = [self.cam for _ in self.label])
+            #     # convert into image space
+            #     im_boxes = self.rcs.state_to_im(boxes,name = [self.cam for _ in self.label])
                  
-            for i in range (len(ts_data)):
-                # for each object, append the image-space box to the ts_data annotation
-                self.label[i]["im_box"] = im_boxes[i]
-                self.label[i]["box"] = boxes[i]
-                self.label[i]["id"] = i
-            # write to new location
+            # for i in range (len(ts_data)):
+            #     # for each object, append the image-space box to the ts_data annotation
+            #     self.label[i]["im_box"] = im_boxes[i]
+            #     self.label[i]["box"] = boxes[i]
+            #     self.label[i]["id"] = i
+            # # write to new location
+            
+            if len(ts_data) > 0:
+                if False: #--------------------------------------------------------------------------------------------------------------------------------------------- single or double box for trailers
+                    boxes = torch.stack([torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() for obj in ts_data])
+                    # convert into image space
+                    im_boxes = self.rcs.state_to_im(boxes,name = [self.cam for _ in self.label])
+                    
+                    for i in range (len(ts_data)):
+                        # for each object, append the image-space box to the ts_data annotation
+                        ts_data[i]["im_box"] = im_boxes[i]
+                        ts_data[i]["box"] = boxes[i]
+                        if "gen" not in ts_data[i].keys(): ts_data[i]["gen"] = "Manual"
+                
+                else:
+                    # separate cab and trailer boxes
+                    trailers = []
+                    for obj in ts_data:
+                        if obj["cab_length"] > 0:
+                            item = obj
+                            front = torch.tensor([item["x"]+item["l"]*item["direction"] - item["cab_length"]*item["direction"],item["y"],item["cab_length"],item["w"],item["h"],item["direction"]]).float()
+                            back =  torch.tensor([item["x"],item["y"],item["l"] - item["cab_length"],item["w"],item["h"],item["direction"]]).float()
+                            front_im = self.rcs.state_to_im(front.unsqueeze(0),name = [self.cam])
+                            back_im =  self.rcs.state_to_im(back.unsqueeze(0),name = [self.cam])
+                            
+                            obj_new = copy.deepcopy(obj)
+                            
+                            obj["box"] = front
+                            obj["im_box"] = front_im
+                            
+                            obj_new["box"] = back
+                            obj_new["im_box"] = back_im
+                            
+                            if "semi" in obj["class"]: # front = original, back = trailer_s
+                                obj_new["class"] = "trailer_sem"
+                            else:   # front = orighinal, back = trailer
+                                obj_new["class"] = "trailer"
+
+                            trailers.append(obj_new)
+                            
+                        else:
+                            box = torch.tensor([obj["x"],obj["y"],obj["l"],obj["w"],obj["h"],obj["direction"]]).float() 
+                            im_box = self.rcs.state_to_im(box.unsqueeze(0),name = [self.cam])
+                            obj["box"] = box
+                            obj["im_box"] = im_box
+
+                    ts_data += trailers
+                    
+                    
+                    
+                    
+            
             with open(os.path.join(destination_dir,label_name),"wb") as f:
-                  pickle.dump(self.label,f)
+                  pickle.dump(ts_data,f)
               
             
             # ensure that there is a mask image written
@@ -321,7 +373,7 @@ class Frame_Labeler:
                 if self.TEXT:
                     labels = ["{} {}".format(self.label[idx]["class"],idx) for idx in range(len(self.label))]
                 
-                self.rcs.plot_state_boxes(self.plot_frame, boxes,times = None, labels = labels,name = [self.cam for _ in self.label],size = 0.8)
+                self.rcs.plot_state_boxes(self.plot_frame, boxes,times = None, thickness = 2, labels = labels,name = [self.cam for _ in self.label],size = 0.8)
             
             trucks = []
             for item in self.label:
@@ -329,7 +381,7 @@ class Frame_Labeler:
                     trucks.append(torch.tensor([item["x"]+item["l"]*item["direction"] - item["cab_length"]*item["direction"],item["y"],item["cab_length"],item["w"],item["h"],item["direction"]]))
             if len(trucks) > 0:
                 boxes = torch.stack(trucks)
-                self.rcs.plot_state_boxes(self.plot_frame, boxes,times = None, thickness = 1, name = [self.cam for _ in trucks],color = (0,100,255))
+                self.rcs.plot_state_boxes(self.plot_frame, boxes,times = None, thickness = 2, name = [self.cam for _ in trucks],color = (0,100,255))
               
             if self.mask is not None and self.MASK:
                 self.plot_frame = (self.mask * self.plot_frame.astype(np.float64)).astype(np.uint8)
@@ -751,5 +803,5 @@ if __name__ == "__main__":
     lab_dir = "/home/worklab/Documents/datasets/more_3D_frames/label"
     
     f = Frame_Labeler(im_dir, lab_dir,advance = False)
-    #f.run()
-    f.export()
+    f.run()
+    #f.export()

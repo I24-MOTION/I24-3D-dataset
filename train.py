@@ -193,6 +193,7 @@ def plot_detections(dataset,retinanet,plot_every,include_gt = False):
      
     
     for bbox in gt:
+        #continue
         thickness = 1
         bbox = bbox.int().data.cpu().numpy()
         gt_color = (1.0,1.0,0)
@@ -295,11 +296,11 @@ if __name__ == "__main__":
 
     # define parameters here
     depth = 34
-    num_classes = 8
+    num_classes = 10
     patience = 1
     max_epochs = 100
-    start_epoch = 0
-    checkpoint_file =  "cp/truck_running_checkpoint.pt"
+    start_epoch = 90
+    checkpoint_file = "cp/truck_running_checkpoint.pt"
     MULTI_GPU = True
     batch_size = 8 if MULTI_GPU else 2
     plot_every = 20
@@ -384,7 +385,7 @@ if __name__ == "__main__":
     retinanet.module.freeze_bn() if MULTI_GPU else retinanet.freeze_bn()
             
     
-    optimizer = optim.Adam(retinanet.parameters(), lr=1e-4)
+    optimizer = optim.Adam(retinanet.parameters(), lr=1e-6)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience, verbose=True, mode = "min")
     loss_hist = collections.deque(maxlen=500)
     most_recent_mAP = 0
@@ -435,7 +436,7 @@ if __name__ == "__main__":
                 vp_loss = vp_loss.mean()
                 emb_loss = emb_loss.mean() 
                 
-                loss = classification_loss + regression_loss + vp_loss #+ emb_loss
+                loss = classification_loss + regression_loss + 2*vp_loss #+ emb_loss
                 
                 if loss == 0 or torch.isnan(loss):
                     continue
